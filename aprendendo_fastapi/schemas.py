@@ -31,7 +31,7 @@ class LoginSchema(BaseModel):
 class ItemPedidoSchema(BaseModel):
     quantidade: int
     sabor: str
-    tamanho: int
+    tamanho: str
     preco_unitario: float
 
     class Config:
