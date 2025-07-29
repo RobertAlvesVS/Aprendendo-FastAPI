@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from aprendendo_fastapi.dependencies import pegar_sessao, verificar_token
-from aprendendo_fastapi.schemas import PedidoSchema
-from aprendendo_fastapi.models import Pedido, Usuario
+from aprendendo_fastapi.schemas import PedidoSchema, ItemPedidoSchema
+from aprendendo_fastapi.models import ItemPedido, Pedido, Usuario
 
 order_router = APIRouter(
     prefix="/order", tags=["order"], dependencies=[Depends(verificar_token)]
@@ -42,4 +42,49 @@ async def cancelar_pedido(
     return {
         "mensagem": f"Pedido numero {pedido.id} cancelado com sucesso",
         "pedido": pedido,
+    }
+
+
+@order_router.get("/listar")
+async def listar_pedidos(
+    session: Session = Depends(pegar_sessao),
+    usuario: Usuario = Depends(verificar_token),
+):
+    if not usuario.admin:
+        raise HTTPException(
+            status_code=401, detail="Você não tem autorização para listar pedidos"
+        )
+
+    pedidos = session.query(Pedido).all()
+    return {"pedidos": pedidos}
+
+
+@order_router.post("/pedido/adicionar-item/{id_pedido}")
+async def adicionar_item_pedido(
+    id_pedido: int,
+    item_pedido_schema: ItemPedidoSchema,
+    session: Session = Depends(pegar_sessao),
+    usuario: Usuario = Depends(verificar_token),
+):
+    pedido = session.query(Pedido).filter(Pedido.id == id_pedido).first()
+    if not pedido:
+        raise HTTPException(status_code=400, detail="Pedido não existe")
+    elif not usuario.admin and usuario.id != pedido.usuario:
+        raise HTTPException(
+            status_code=401, detail="Você não tem autorização para fazer essa operação"
+        )
+    item_pedido = ItemPedido(
+        item_pedido_schema.quantidade,
+        item_pedido_schema.sabor,
+        item_pedido_schema.tamanho,
+        item_pedido_schema.preco_unitario,
+        id_pedido,
+    )
+    session.add(item_pedido)
+    pedido.calcular_preco()
+    session.commit()
+    return {
+        "Mensagem": "Item Criado com Sucesso",
+        "Item_id": item_pedido.id,
+        "preco_pedido": pedido.preco,
     }
